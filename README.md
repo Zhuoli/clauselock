@@ -32,6 +32,7 @@ create_fund ──► Funded ──accept(hash)──► Accepted ──submit_e
 | `cancel()` | sponsor | Funded (nobody accepted yet) | Refunded |
 | `finalize_payment()` | anyone (fee payer) | Approved | reward → `escrow.contributor`; Paid |
 | `finalize_refund()` | anyone (fee payer) | Funded & `now >= accept_by`, Accepted & `now >= submit_by`, Submitted & `now >= review_by` | reward → `escrow.sponsor`; Refunded |
+| `sweep_excess()` | anyone | Paid or Refunded | lamports sent to the PDA outside the protocol (above rent) → `escrow.sponsor` |
 
 **Custody.** The reward sits in the program-owned escrow account on top of its rent-exempt reserve; payouts debit the account directly and the reserve is never touched. The account is not closed: it stays as an on-chain receipt and as replay protection (the PDA for a used `escrow_id` can never be re-created). Destinations are pinned with `has_one`, so a caller cannot redirect funds.
 
@@ -55,7 +56,7 @@ Cross-language test vectors: [`vectors/terms-hash-v1.json`](vectors/terms-hash-v
 | Path | What |
 |---|---|
 | `programs/clauselock/src/lib.rs` | Anchor program (Anchor 1.2, native SOL) |
-| `programs/clauselock/tests/escrow.rs` | 21 LiteSVM tests |
+| `programs/clauselock/tests/escrow.rs` | 23 LiteSVM tests |
 | `sdk/index.ts` | TS client: PDA, terms hash, instruction builders, account decoder, `explain()` (`can_*`) |
 | `fineprint/adapter.ts` | Fine Print rule packet → conflict gate → canonical terms doc + digest; doc-vs-chain check |
 | `fineprint/demo-bounty.packet.json` | Demo bounty rule packet (listing says Oct 14, Terms say Oct 12) |
@@ -70,8 +71,8 @@ Toolchain used: Agave/Solana CLI 4.3, `cargo-build-sbf` 4.4 (platform-tools v1.5
 ```bash
 npm install
 anchor build --arch v1          # SBPF v1: deployable on devnet today (see note)
-cargo test -p clauselock        # 21 LiteSVM tests
-npm run test:sdk                # 6 off-chain tests (vectors, gate, doc/chain check, explainers)
+cargo test -p clauselock        # 23 LiteSVM tests
+npm run test:sdk                # 9 off-chain tests (vectors, gate, input validation, doc/chain check, explainers)
 npm run typecheck
 ./scripts/localnet.sh           # local validator + deploy + full demo (about 40 s)
 ```
@@ -101,6 +102,10 @@ Note on SBPF: `cargo-build-sbf` 4.4 defaults to SBPF v3, while `solana-test-vali
 
 - **Reused from Fine Print** (`../sanity-challenge`, built earlier for the DEV × Sanity challenge): the content model (`ruleSource` with precedence, `clause` with verbatim quote + `normalized` JSON, `conflict` with claims/resolution), and the "deterministic verdict + clause ids" style of its rule tools.
 - **New for ClauseLock:** the Solana program, tests, terms schema and commitment, test vectors, TS SDK, conflict gate and canonical terms document, `can_*` explainers over on-chain state, CLI and demo.
+
+## Review log
+
+- 2026-10-01: Codex (offline source review) found no unauthorized drain path and confirmed SDK byte layouts/discriminators match the program. Fixed from its findings: adapter now rejects timezone-free or impossible instants, non-discretionary payment promises, a contributor wallet that differs from the bound one, and out-of-range amounts/IDs; the doc-vs-chain check verifies ISO labels against numeric deadlines; SDK validates u8/u64 ranges, account size/schema/state, owner and PDA; program gained `sweep_excess` so unsolicited lamports are not stranded. Still open: SDK-instruction parity tests inside LiteSVM (today covered by the live-validator demo), full state×action matrix, CI that builds the `.so` before tests.
 
 ## Roadmap
 

@@ -177,6 +177,15 @@ impl Env {
         );
         self.send(ix, &[caller])
     }
+    fn sweep(&mut self, dest: Pubkey) -> Result<(), String> {
+        let st = self.stranger.insecure_clone();
+        let ix = Instruction::new_with_bytes(
+            clauselock::id(),
+            &clauselock::instruction::SweepExcess {}.data(),
+            clauselock::accounts::FinalizeRefund { caller: st.pubkey(), escrow: self.escrow, sponsor: dest }.to_account_metas(None),
+        );
+        self.send(ix, &[&st])
+    }
     fn refund(&mut self) -> Result<(), String> {
         let (s, d) = (self.stranger.insecure_clone(), self.sponsor.pubkey());
         self.refund_to(&s, d)
@@ -457,6 +466,8 @@ fn identical_transaction_replay_is_rejected_by_runtime() {
 fn accept_deadline_exact_second() {
     let mut env = Env::new();
     env.create().unwrap();
+    env.set_time(ACCEPT_BY + 1);
+    expect_err(env.accept(), code(ClauseLockError::DeadlinePassed));
     env.set_time(ACCEPT_BY);
     expect_err(env.accept(), code(ClauseLockError::DeadlinePassed));
     env.set_time(ACCEPT_BY - 1);
@@ -482,6 +493,8 @@ fn review_deadline_exact_second() {
     env.create().unwrap();
     env.accept().unwrap();
     env.submit().unwrap();
+    env.set_time(REVIEW_BY + 1);
+    expect_err(env.approve(), code(ClauseLockError::DeadlinePassed));
     env.set_time(REVIEW_BY);
     expect_err(env.approve(), code(ClauseLockError::DeadlinePassed));
     env.set_time(REVIEW_BY - 1);
@@ -574,4 +587,51 @@ fn terms_fields_unchanged_through_lifecycle() {
         (a.sponsor, a.contributor, a.amount, a.accept_by, a.submit_by, a.review_by, a.refund_policy, a.doc_digest, a.terms_hash),
         (b.sponsor, b.contributor, b.amount, b.accept_by, b.submit_by, b.review_by, b.refund_policy, b.doc_digest, b.terms_hash)
     );
+}
+
+#[test]
+fn unsolicited_lamports_are_swept_to_sponsor_only_after_settlement() {
+    let mut env = Env::new();
+    env.create().unwrap();
+    // Someone sends 0.5 SOL straight to the escrow PDA (outside the protocol).
+    let donor = Keypair::new();
+    env.svm.airdrop(&donor.pubkey(), SOL).unwrap();
+    let t = anchor_lang::solana_program::system_instruction::transfer(&donor.pubkey(), &env.escrow, SOL / 2);
+    env.send(t, &[&donor]).unwrap();
+    let sp = env.sponsor.pubkey();
+    expect_err(env.sweep(sp), code(ClauseLockError::WrongState));
+    env.accept().unwrap();
+    env.submit().unwrap();
+    env.approve().unwrap();
+    let c_before = env.lamports(&env.contributor.pubkey());
+    env.pay().unwrap();
+    assert_eq!(env.lamports(&env.contributor.pubkey()), c_before + AMOUNT, "contributor gets exactly the reward");
+    let st = env.stranger.pubkey();
+    expect_err(env.sweep(st), anchor_code(anchor_lang::error::ErrorCode::ConstraintHasOne));
+    let s_before = env.lamports(&sp);
+    env.sweep(sp).unwrap();
+    assert_eq!(env.lamports(&sp), s_before + SOL / 2);
+    let rent_min = env.svm.minimum_balance_for_rent_exemption(8 + <Escrow as anchor_lang::Space>::INIT_SPACE);
+    assert_eq!(env.lamports(&env.escrow), rent_min);
+    expect_err(env.sweep(sp), code(ClauseLockError::NothingToSweep));
+}
+
+#[test]
+fn minimum_reward_pays_into_an_empty_wallet() {
+    let mut env = Env::new();
+    let empty = Keypair::new(); // never funded: payout must leave it rent-exempt
+    let s = env.sponsor.insecure_clone();
+    let id = 77u64;
+    env.send(env.create_ix(id, empty.pubkey(), clauselock::constants::MIN_AMOUNT, ACCEPT_BY, SUBMIT_BY, REVIEW_BY, 0), &[&s]).unwrap();
+    env.escrow = escrow_pda(&s.pubkey(), id);
+    // The contributor needs fees for accept/submit; give them to a fee payer instead of the contributor.
+    let h = env.state().terms_hash;
+    let fee = env.stranger.insecure_clone();
+    let ix = env.contributor_ix(empty.pubkey(), clauselock::instruction::Accept { expected_terms_hash: h }.data());
+    env.send(ix, &[&fee, &empty]).unwrap();
+    let ix = env.contributor_ix(empty.pubkey(), clauselock::instruction::SubmitEvidence { evidence_hash: EVIDENCE }.data());
+    env.send(ix, &[&fee, &empty]).unwrap();
+    env.approve().unwrap();
+    env.pay_to(&fee, empty.pubkey()).unwrap();
+    assert_eq!(env.lamports(&empty.pubkey()), clauselock::constants::MIN_AMOUNT);
 }

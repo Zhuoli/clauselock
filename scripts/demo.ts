@@ -42,7 +42,7 @@ async function expectFail(label: string, ixs: TransactionInstruction[], signers:
   }
   throw new Error(`${label}: unexpectedly succeeded`)
 }
-const fetchEscrow = async (pda: PublicKey) => cl.decodeEscrow((await conn.getAccountInfo(pda, 'confirmed'))!.data)
+const fetchEscrow = async (pda: PublicKey) => cl.decodeVerifiedEscrow(pda, (await conn.getAccountInfo(pda, 'confirmed'))!)
 const chainNow = async () => BigInt((await conn.getBlockTime(await conn.getSlot('confirmed'))) ?? Math.floor(Date.now() / 1000))
 async function waitUntilChain(t: bigint) { while ((await chainNow()) < t) await sleep(1000) }
 

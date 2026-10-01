@@ -33,7 +33,23 @@ export function canonicalJson(v: unknown): string {
 }
 export const digestHex = (doc: unknown) => createHash('sha256').update(canonicalJson(doc), 'utf8').digest('hex')
 
-const toUnix = (iso: string) => { const t = Date.parse(iso); if (Number.isNaN(t)) throw new Error('bad instant ' + iso); return String(Math.floor(t / 1000)) }
+/** Instants must be explicit: YYYY-MM-DDTHH:MM:SS(.sss)?(Z|±HH:MM). Timezone-free strings are rejected. */
+const INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/
+export function toUnix(iso: unknown): string | null {
+  if (typeof iso !== 'string') return null
+  const m = iso.match(INSTANT_RE)
+  if (!m) return null
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return null
+  // Reject calendar-normalized dates such as Feb 30 by round-tripping the local date part.
+  const off = m[8] === 'Z' ? 0 : (m[8][0] === '-' ? -1 : 1) * (Number(m[8].slice(1, 3)) * 60 + Number(m[8].slice(4, 6)))
+  const local = new Date(t + off * 60_000)
+  if (local.getUTCFullYear() !== Number(m[1]) || local.getUTCMonth() + 1 !== Number(m[2]) || local.getUTCDate() !== Number(m[3])) return null
+  return String(Math.floor(t / 1000))
+}
+const isoOf = (unix: string) => new Date(Number(unix) * 1000).toISOString()
+const U64_MAX = (1n << 64n) - 1n
+const isU64 = (v: unknown) => typeof v === 'string' && /^\d{1,20}$/.test(v) && BigInt(v) <= U64_MAX
 
 export type TermsDoc = {
   schema: 'clauselock-terms/v1'
@@ -90,7 +106,20 @@ export function compileTerms(input: CompileInput): {ok: true; doc: TermsDoc; dig
   if (issues.length) return {ok: false, issues}
 
   const n = (f: Field) => byId.get(chosen[f]!)!.normalized!
-  const [acceptBy, submitBy, reviewBy] = (['accept_by', 'submit_by', 'review_by'] as const).map((f) => toUnix(n(f).instant))
+  const bad = (field: string, message: string) => issues.push({kind: 'invalid', field, message, clauses: [chosen[field as Field]!].filter(Boolean), quotes: chosen[field as Field] ? [q(chosen[field as Field]!)] : []})
+  const times = (['accept_by', 'submit_by', 'review_by'] as const).map((f) => {
+    const u = toUnix(n(f).instant)
+    if (u === null) bad(f, `"${n(f).instant}" is not an explicit instant (need ISO 8601 with seconds and Z or a UTC offset).`)
+    return u ?? '0'
+  })
+  const [acceptBy, submitBy, reviewBy] = times
+  if (!isU64(String(n('amount').lamports)) || BigInt(String(n('amount').lamports)) < 1_000_000n) bad('amount', `Reward must be an integer number of lamports >= 1000000 (got ${JSON.stringify(n('amount').lamports)}).`)
+  if (!isU64(input.escrowId)) bad('escrow_id', `escrow_id must be a u64 decimal string (got ${JSON.stringify(input.escrowId)}).`)
+  if (n('discretion').sponsorDiscretion !== true) bad('discretion', 'Schema v1 only supports sponsor-discretion approval. A clause promising automatic or guaranteed payment cannot be represented on-chain and must be removed or reworded.')
+  const cn = n('contributor')
+  if (!(cn.role === 'invited' && (cn.wallet === undefined || cn.wallet === input.contributor)))
+    bad('contributor', cn.wallet ? `The terms name contributor wallet ${cn.wallet}, but the escrow would bind ${input.contributor}.` : 'Schema v1 supports exactly one invited contributor (normalized {"role":"invited"}).')
+  if (issues.length) return {ok: false, issues}
   const pol = n('refund_policy').policy
   if (pol !== 'refund-to-sponsor-on-expiry') issues.push({kind: 'invalid', field: 'refund_policy', message: `Unsupported refund policy "${pol}" (schema v1 supports only refund-to-sponsor-on-expiry).`, clauses: [chosen.refund_policy!], quotes: [q(chosen.refund_policy!)]})
   if (!(BigInt(acceptBy) < BigInt(submitBy) && BigInt(submitBy) < BigInt(reviewBy)))
@@ -106,9 +135,7 @@ export function compileTerms(input: CompileInput): {ok: true; doc: TermsDoc; dig
     escrow_id: input.escrowId,
     amount_lamports: String(n('amount').lamports),
     accept_by: acceptBy, submit_by: submitBy, review_by: reviewBy,
-    accept_by_iso: new Date(Number(acceptBy) * 1000).toISOString(),
-    submit_by_iso: new Date(Number(submitBy) * 1000).toISOString(),
-    review_by_iso: new Date(Number(reviewBy) * 1000).toISOString(),
+    accept_by_iso: isoOf(acceptBy), submit_by_iso: isoOf(submitBy), review_by_iso: isoOf(reviewBy),
     refund_policy: 'refund-to-sponsor-on-expiry',
     disclosures: [
       'Approval is at the sponsor\'s discretion. If the sponsor does not approve before review_by, anyone can return the reward to the sponsor. ClauseLock prevents hidden term changes and unfunded promises; it does not guarantee payment for submitted work.',
@@ -124,6 +151,9 @@ export function compileTerms(input: CompileInput): {ok: true; doc: TermsDoc; dig
 /** Contributor-side check before signing: the document must hash to the on-chain digest and its fields must equal the on-chain fields. */
 export function checkDocAgainstChain(doc: TermsDoc, chain: {sponsor: string; contributor: string; escrowId: string; amount: string; acceptBy: string; submitBy: string; reviewBy: string; refundPolicy: number; docDigestHex: string}): string[] {
   const errs: string[] = []
+  if (doc.schema !== 'clauselock-terms/v1') errs.push(`unsupported terms schema ${doc.schema}`)
+  for (const k of ['accept_by', 'submit_by', 'review_by'] as const)
+    if (doc[`${k}_iso`] !== isoOf(doc[k])) errs.push(`${k}_iso label "${doc[`${k}_iso`]}" does not match ${k}=${doc[k]} (${isoOf(doc[k])})`)
   if (digestHex(doc) !== chain.docDigestHex) errs.push('terms document digest does not match the on-chain doc_digest')
   const pairs: [string, string, string][] = [
     ['sponsor', doc.parties.sponsor, chain.sponsor], ['contributor', doc.parties.contributor, chain.contributor],

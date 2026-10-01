@@ -14,6 +14,7 @@
 //!         Accepted --(now >= submit_by)--> Refunded
 //!         Submitted --(now >= review_by)--> Refunded
 //!         Approved never refunds.
+//! After Paid/Refunded, `sweep_excess` returns any unsolicited lamports above rent + nothing to the sponsor.
 use anchor_lang::prelude::*;
 
 declare_id!("B5qem1S6padkAWwpAYzHeNDjnPHN6NHdmWRuacgvdgDu");
@@ -106,6 +107,8 @@ pub mod error {
         EmptyEvidence,
         #[msg("Escrow does not hold enough lamports above its rent reserve")]
         InsufficientEscrowBalance,
+        #[msg("Nothing to sweep: no lamports above the rent reserve")]
+        NothingToSweep,
     }
 }
 
@@ -374,6 +377,20 @@ pub mod clauselock {
         e.settled_by = ctx.accounts.caller.key();
         emit!(EscrowStateChanged { escrow: e.key(), state: e.state, at: now, by: e.settled_by });
         Ok(())
+    }
+
+    /// After settlement, anyone may return lamports that were sent to the escrow outside the
+    /// protocol (above the rent reserve) to the fixed sponsor address. The receipt account stays.
+    pub fn sweep_excess(ctx: Context<FinalizeRefund>) -> Result<()> {
+        require!(
+            matches!(ctx.accounts.escrow.state, EscrowState::Paid | EscrowState::Refunded),
+            ClauseLockError::WrongState
+        );
+        let ai = ctx.accounts.escrow.to_account_info();
+        let rent_min = Rent::get()?.minimum_balance(ai.data_len());
+        let excess = ai.lamports().saturating_sub(rent_min);
+        require!(excess > 0, ClauseLockError::NothingToSweep);
+        pay_out(&ai, &ctx.accounts.sponsor.to_account_info(), excess)
     }
 }
 

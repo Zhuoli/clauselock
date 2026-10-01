@@ -17,9 +17,9 @@ export const sha256 = (b: Uint8Array | string) => createHash('sha256').update(b)
 const disc = (name: string) => sha256(`global:${name}`).subarray(0, 8)
 const ACCOUNT_DISC = sha256('account:Escrow').subarray(0, 8)
 
-const u64 = (n: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(n); return b }
+const u64 = (n: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(n); return b } // throws if out of range
 const i64 = (n: bigint) => { const b = Buffer.alloc(8); b.writeBigInt64LE(n); return b }
-const u8 = (n: number) => Buffer.from([n])
+const u8 = (n: number) => { if (!Number.isInteger(n) || n < 0 || n > 255) throw new RangeError(`u8 out of range: ${n}`); return Buffer.from([n]) }
 const b32 = (x: Uint8Array) => { if (x.length !== 32) throw new Error('expected 32 bytes'); return Buffer.from(x) }
 
 export type Terms = {
@@ -35,6 +35,7 @@ export type Terms = {
 }
 
 export function termsPreimage(t: Terms, schemaVersion = SCHEMA_VERSION): Buffer {
+  if (t.refundPolicy !== REFUND_TO_SPONSOR_ON_EXPIRY) throw new RangeError(`unsupported refund policy ${t.refundPolicy}`)
   return Buffer.concat([
     TERMS_DOMAIN, u8(schemaVersion), t.sponsor.toBuffer(), t.contributor.toBuffer(),
     u64(t.escrowId), u64(t.amount), i64(t.acceptBy), i64(t.submitBy), i64(t.reviewBy),
@@ -77,6 +78,8 @@ export const cancelIx = (sponsor: PublicKey, escrow: PublicKey, programId = PROG
   ix([{pubkey: sponsor, isSigner: true, isWritable: true}, {pubkey: escrow, isSigner: false, isWritable: true}], disc('cancel'), programId)
 export const finalizePaymentIx = (caller: PublicKey, escrow: PublicKey, contributor: PublicKey, programId = PROGRAM_ID) =>
   ix([...two(caller, escrow), {pubkey: contributor, isSigner: false, isWritable: true}], disc('finalize_payment'), programId)
+export const sweepExcessIx = (caller: PublicKey, escrow: PublicKey, sponsor: PublicKey, programId = PROGRAM_ID) =>
+  ix([...two(caller, escrow), {pubkey: sponsor, isSigner: false, isWritable: true}], disc('sweep_excess'), programId)
 export const finalizeRefundIx = (caller: PublicKey, escrow: PublicKey, sponsor: PublicKey, programId = PROGRAM_ID) =>
   ix([...two(caller, escrow), {pubkey: sponsor, isSigner: false, isWritable: true}], disc('finalize_refund'), programId)
 
@@ -88,8 +91,12 @@ export type Escrow = Terms & {
   createdAt: bigint; acceptedAt: bigint; submittedAt: bigint; approvedAt: bigint; settledAt: bigint; settledBy: PublicKey
 }
 
+export const ESCROW_ACCOUNT_SIZE = 284
 export function decodeEscrow(data: Buffer): Escrow {
+  if (data.length !== ESCROW_ACCOUNT_SIZE) throw new Error(`unexpected Escrow size ${data.length}`)
   if (!data.subarray(0, 8).equals(ACCOUNT_DISC)) throw new Error('not a ClauseLock Escrow account')
+  if (data[8] !== SCHEMA_VERSION) throw new Error(`unsupported schema version ${data[8]}`)
+  if (data[211] >= STATES.length) throw new Error(`invalid state byte ${data[211]}`)
   let o = 8
   const r8 = () => data[o++]
   const rU64 = () => { const v = data.readBigUInt64LE(o); o += 8; return v }
@@ -105,11 +112,19 @@ export function decodeEscrow(data: Buffer): Escrow {
 }
 
 export const ERRORS = ['BadDeadlines', 'AmountTooSmall', 'BadContributor', 'BadRefundPolicy', 'WrongState', 'TermsMismatch',
-  'DeadlinePassed', 'RefundNotYetAvailable', 'ApprovedCannotRefund', 'EmptyEvidence', 'InsufficientEscrowBalance'] as const
+  'DeadlinePassed', 'RefundNotYetAvailable', 'ApprovedCannotRefund', 'EmptyEvidence', 'InsufficientEscrowBalance', 'NothingToSweep'] as const
 /** Pull the Anchor error name out of a failed transaction's logs. */
 export function anchorErrorFromLogs(logs: string[] | null | undefined): string | null {
   for (const l of logs ?? []) { const m = l.match(/Error Code: (\w+)/); if (m) return m[1] }
   return null
+}
+
+/** Fetch-side check: the account must be owned by ClauseLock and sit at the PDA its own fields imply. */
+export function decodeVerifiedEscrow(address: PublicKey, info: {owner: PublicKey; data: Buffer}, programId = PROGRAM_ID): Escrow {
+  if (!info.owner.equals(programId)) throw new Error(`escrow owned by ${info.owner.toBase58()}, not ClauseLock`)
+  const e = decodeEscrow(info.data)
+  if (!escrowPda(e.sponsor, e.escrowId, programId).equals(address)) throw new Error('escrow address does not match its sponsor/escrow_id PDA')
+  return e
 }
 
 // ---------- deterministic explanations ----------

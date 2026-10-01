@@ -77,4 +77,34 @@ t('explainers cite clauses and follow the on-chain predicates', () => {
   v = explain({...e, state: 'Funded'}, 100n, 'refund', cm); assert.equal(v.allowed, true)
 })
 
+t('adapter rejects ambiguous instants, non-discretionary promises, wrong wallet, bad amounts', () => {
+  const resolve = [{conflict: 'conflict.demo.deadline', winningClaim: 'clause.demo.deadline.terms', resolvedBy: 'sponsor' as const}]
+  const mut = (f: (p: Packet) => void) => { const p: Packet = structuredClone(packet); f(p); return compileTerms({packet: p, sponsor, contributor, escrowId: '1', resolutions: resolve}) }
+  const issueOn = (r: ReturnType<typeof compileTerms>, field: string) => !r.ok && r.issues.some((i) => i.field === field)
+  assert.ok(issueOn(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.accept')!.normalized!.instant = '2026-10-05T23:59:59' }), 'accept_by'), 'timezone-free instant')
+  assert.ok(issueOn(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.accept')!.normalized!.instant = '2026-02-30T00:00:00Z' }), 'accept_by'), 'Feb 30')
+  assert.ok(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.accept')!.normalized!.instant = '2026-10-05T23:59:59-07:00' }).ok, 'explicit offset ok')
+  assert.ok(issueOn(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.discretion')!.normalized!.sponsorDiscretion = false }), 'discretion'))
+  assert.ok(issueOn(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.contributor')!.normalized!.wallet = sponsor }), 'contributor'))
+  assert.ok(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.contributor')!.normalized!.wallet = contributor }).ok)
+  assert.ok(issueOn(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.reward')!.normalized!.lamports = '1.5' }), 'amount'))
+  assert.ok(issueOn(mut((p) => { p.clauses.find((c) => c._id === 'clause.demo.reward')!.normalized!.lamports = '18446744073709551616' }), 'amount'))
+  const r = compileTerms({packet, sponsor, contributor, escrowId: '-1', resolutions: resolve})
+  assert.ok(issueOn(r, 'escrow_id'))
+})
+
+t('inconsistent ISO label is caught even if its digest was committed', () => {
+  const r = compileTerms({packet, sponsor, contributor, escrowId: '1', resolutions: [{conflict: 'conflict.demo.deadline', winningClaim: 'clause.demo.deadline.terms', resolvedBy: 'sponsor'}]})
+  assert.ok(r.ok); if (!r.ok) return
+  const lying = {...r.doc, accept_by_iso: '2099-01-01T00:00:00.000Z'}
+  const chain = {sponsor, contributor, escrowId: '1', amount: r.doc.amount_lamports, acceptBy: r.doc.accept_by, submitBy: r.doc.submit_by, reviewBy: r.doc.review_by, refundPolicy: 0, docDigestHex: digestHex(lying)}
+  assert.ok(checkDocAgainstChain(lying, chain).some((e) => e.startsWith('accept_by_iso')))
+})
+
+t('SDK refuses out-of-range u8 / unsupported policy', () => {
+  const base = {sponsor: PublicKey.default, contributor: PublicKey.default, escrowId: 1n, amount: 1n, acceptBy: 1n, submitBy: 2n, reviewBy: 3n, docDigest: Buffer.alloc(32)}
+  assert.throws(() => termsPreimage({...base, refundPolicy: 256}))
+  assert.throws(() => termsPreimage({...base, escrowId: 1n << 64n, refundPolicy: 0}))
+})
+
 console.log(`\n${n} passed`)
