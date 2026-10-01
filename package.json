@@ -1,0 +1,25 @@
+{
+  "name": "clauselock",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build:program": "anchor build --arch v1",
+    "test:program": "cargo test -p clauselock",
+    "test:sdk": "tsx sdk/test.ts",
+    "typecheck": "tsc -p .",
+    "test": "npm run test:program && npm run test:sdk",
+    "terms": "tsx scripts/terms.ts",
+    "demo": "tsx scripts/demo.ts",
+    "vectors": "python3 scripts/gen_vectors.py"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.20.0",
+    "typescript": "^5.6.0"
+  }
+}

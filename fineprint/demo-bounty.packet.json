@@ -1,0 +1,40 @@
+{
+  "_comment": "A bounty rule packet in Fine Print's content model (ruleSource / clause / conflict). Fictional demo bounty. Clause `normalized` JSON is what code computes on; `quote` is what humans read.",
+  "bounty": {"_id": "bounty.demo-escrow-explainer", "title": "Write a Solana escrow explainer (demo bounty)", "url": "https://example.org/bounties/escrow-explainer"},
+  "ruleSources": [
+    {"_id": "src.demo.terms", "title": "Bounty Terms", "url": "https://example.org/bounties/escrow-explainer/terms", "kind": "contestRules", "precedenceRank": 1,
+     "precedenceQuote": "If the listing and these Terms disagree, these Terms govern."},
+    {"_id": "src.demo.listing", "title": "Bounty listing page", "url": "https://example.org/bounties/escrow-explainer", "kind": "listing", "precedenceRank": 2}
+  ],
+  "clauses": [
+    {"_id": "clause.demo.reward", "topic": "payout", "source": "src.demo.terms",
+     "quote": "The reward is 1 SOL, held in escrow and paid only to the invited contributor.",
+     "normalized": {"field": "amount", "lamports": "1000000000"}},
+    {"_id": "clause.demo.contributor", "topic": "eligibility", "source": "src.demo.terms",
+     "quote": "This bounty is offered to one invited contributor, identified by their wallet address.",
+     "normalized": {"field": "contributor", "role": "invited"}},
+    {"_id": "clause.demo.accept", "topic": "deadline", "source": "src.demo.terms",
+     "quote": "The invited contributor must accept these Terms by October 5, 2026, 11:59 PM PT.",
+     "normalized": {"field": "accept_by", "instant": "2026-10-06T06:59:59Z"}},
+    {"_id": "clause.demo.deadline.listing", "topic": "deadline", "source": "src.demo.listing",
+     "quote": "Deadline: October 14",
+     "normalized": {"field": "submit_by", "instant": "2026-10-15T06:59:59Z", "precision": "day"}},
+    {"_id": "clause.demo.deadline.terms", "topic": "deadline", "source": "src.demo.terms",
+     "quote": "Submissions must be received by October 12, 2026, 11:59 PM PT.",
+     "normalized": {"field": "submit_by", "instant": "2026-10-13T06:59:59Z"}},
+    {"_id": "clause.demo.review", "topic": "judging", "source": "src.demo.terms",
+     "quote": "The Sponsor will approve or decline the submission by October 19, 2026, 11:59 PM PT.",
+     "normalized": {"field": "review_by", "instant": "2026-10-20T06:59:59Z"}},
+    {"_id": "clause.demo.refund", "topic": "payout", "source": "src.demo.terms",
+     "quote": "If the work is not approved by the review date, or a deadline passes before the next step, the reward returns to the Sponsor.",
+     "normalized": {"field": "refund_policy", "policy": "refund-to-sponsor-on-expiry"}},
+    {"_id": "clause.demo.discretion", "topic": "judging", "source": "src.demo.terms",
+     "quote": "Approval is at the Sponsor's sole discretion.",
+     "normalized": {"field": "discretion", "sponsorDiscretion": true}}
+  ],
+  "conflicts": [
+    {"_id": "conflict.demo.deadline", "topic": "deadline", "title": "Listing says Oct 14, Terms say Oct 12, 11:59 PM PT",
+     "claims": ["clause.demo.deadline.listing", "clause.demo.deadline.terms"], "status": "open", "severity": "high",
+     "rationale": "The listing shows a later, date-only deadline. The Terms govern on conflict, but the sponsor must confirm which instant executes before funding."}
+  ]
+}

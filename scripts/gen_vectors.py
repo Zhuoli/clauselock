@@ -25,8 +25,10 @@ for c in cases:
     p = preimage(c)
     assert len(p) == 157
     c["sponsor"] = b58(bytes.fromhex(c["sponsor_hex"])); c["contributor"] = b58(bytes.fromhex(c["contributor_hex"]))
+    for k in ("escrow_id", "amount", "accept_by", "submit_by", "review_by"): c[k] = str(c[k])  # strings: JSON numbers lose 64-bit precision in JS
     c["preimage_hex"] = p.hex(); c["terms_hash_hex"] = hashlib.sha256(p).hexdigest()
 out = {"schema": "clauselock-terms-hash-v1",
+       "note": "64-bit integers are decimal strings.",
        "layout": "'CLAUSELOCK_TERMS_V1' | u8 schema_version | 32 sponsor | 32 contributor | u64 escrow_id | u64 amount | i64 accept_by | i64 submit_by | i64 review_by | u8 refund_policy | 32 doc_digest  (little-endian, 157 bytes); terms_hash = sha256(preimage)",
        "cases": cases}
 path = pathlib.Path(__file__).resolve().parent.parent / "vectors" / "terms-hash-v1.json"
