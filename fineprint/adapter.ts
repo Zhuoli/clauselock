@@ -1,7 +1,7 @@
 /**
  * Fine Print -> ClauseLock adapter.
  * Reuses Fine Print's content model (ruleSource / clause with verbatim quote + normalized JSON /
- * conflict with claims and resolution) from ../sanity-challenge. New here: the conflict gate,
+ * conflict with claims and resolution) from Fine Print (github.com/Zhuoli/fine-print). New here: the conflict gate,
  * the canonical terms document, and its digest.
  *
  * compileTerms() refuses to emit terms while any executable field is missing or contested.

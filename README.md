@@ -4,7 +4,7 @@
 
 Bounty prizes are often a promise, not money set aside. Deadlines and payout terms are spread across a listing, an FAQ and the rules, and they can change after you start. ClauseLock fixes the two parts that a chain can actually fix:
 
-1. **Fine Print** (a rules-reading agent, reused from [`../sanity-challenge`](../sanity-challenge)) reads the bounty's rule packet, flags conflicts and missing fields with verbatim, cited clauses, and **refuses to produce terms until the sponsor resolves them**. Its output is a canonical terms document (stable JSON) and its SHA-256.
+1. **Fine Print** (a rules-reading agent, reused from [Zhuoli/fine-print](https://github.com/Zhuoli/fine-print)) reads the bounty's rule packet, flags conflicts and missing fields with verbatim, cited clauses, and **refuses to produce terms until the sponsor resolves them**. Its output is a canonical terms document (stable JSON) and its SHA-256.
 2. A **Solana program** holds the reward in a PDA. It **derives the terms commitment on-chain** from the executable fields (parties, amount, three deadlines, refund policy, schema version) plus the document digest. The invited contributor accepts by signing that exact hash. No instruction exists that edits terms. Deadlines decide who can move the money, and settlement is permissionless to fixed addresses.
 3. Deterministic **`can_*` explainers** answer "why can't I refund?" from on-chain state plus clause IDs.
 
@@ -121,7 +121,7 @@ Phantom is wired via `@solana/wallet-adapter-react` but has not been exercised i
 
 ## What is reused vs new
 
-- **Reused from Fine Print** (`../sanity-challenge`, built earlier for the DEV × Sanity challenge): the content model (`ruleSource` with precedence, `clause` with verbatim quote + `normalized` JSON, `conflict` with claims/resolution), and the "deterministic verdict + clause ids" style of its rule tools.
+- **Reused from Fine Print** ([github.com/Zhuoli/fine-print](https://github.com/Zhuoli/fine-print), built earlier for the DEV × Sanity challenge): the content model (`ruleSource` with precedence, `clause` with verbatim quote + `normalized` JSON, `conflict` with claims/resolution), and the "deterministic verdict + clause ids" style of its rule tools.
 - **New for ClauseLock:** the Solana program, tests, terms schema and commitment, test vectors, TS SDK, conflict gate and canonical terms document, `can_*` explainers over on-chain state, CLI and demo.
 
 ## Review log
