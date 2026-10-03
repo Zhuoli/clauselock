@@ -8,3 +8,6 @@ test-ledger
 .surfpool
 receipts/localnet-*.json
 receipts/terms-*.json
+web/dist
+test-results
+playwright-report

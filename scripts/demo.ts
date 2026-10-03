@@ -13,7 +13,7 @@ import {readFileSync, writeFileSync, mkdirSync} from 'node:fs'
 import {homedir} from 'node:os'
 import {Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction, type TransactionInstruction} from '@solana/web3.js'
 import * as cl from '../sdk/index.ts'
-import {compileTerms, checkDocAgainstChain, type Packet} from '../fineprint/adapter.ts'
+import {compileTerms, checkDocAgainstChain, withDemoDeadlines, type Packet} from '../fineprint/adapter.ts'
 
 const arg = (k: string, d?: string) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d }
 const cluster = arg('cluster', 'localnet')!
@@ -55,15 +55,7 @@ async function fund(kps: Keypair[], lamports: number) {
   await send('fund demo wallets from deployer', kps.map((k) => SystemProgram.transfer({fromPubkey: payer.publicKey, toPubkey: k.publicKey, lamports})), [payer])
 }
 
-function demoSpeedPacket(packet: Packet, now: number, offsets: Record<string, number>): Packet {
-  const p: Packet = structuredClone(packet)
-  for (const c of p.clauses) {
-    const f = c.normalized?.field as string
-    if (f in offsets) { c.normalized!.instant = new Date((now + offsets[f]) * 1000).toISOString(); c.quote += ` [demo speed: now+${offsets[f]}s]` }
-    if (f === 'amount') { c.normalized!.lamports = REWARD.toString(); c.quote += ` [demo amount: ${Number(REWARD) / LAMPORTS_PER_SOL} SOL]` }
-  }
-  return p
-}
+const demoSpeedPacket = (packet: Packet, now: number, offsets: Record<string, number>) => withDemoDeadlines(packet, now, offsets, REWARD.toString())
 
 async function main() {
   log(`ClauseLock demo on ${cluster} (${url}); program ${cl.PROGRAM_ID.toBase58()}`)

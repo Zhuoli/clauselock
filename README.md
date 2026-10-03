@@ -63,6 +63,9 @@ Cross-language test vectors: [`vectors/terms-hash-v1.json`](vectors/terms-hash-v
 | `scripts/demo.ts` | End-to-end demo on a live cluster |
 | `scripts/terms.ts` | CLI: `compile` (packet → terms) and `inspect` (escrow → verified state + `can_*`) |
 | `vectors/` | Terms-hash test vectors |
+| `web/` | Vite + React web UI (Phantom via Wallet Standard, localnet burner wallets), Playwright e2e tests |
+| `scripts/e2e.sh` | Local validator + deploy + browser tests |
+| `scripts/airdrop-retry.sh` | Spaced devnet faucet retries; deploys and runs the devnet demo once funded |
 
 ## Run it
 
@@ -88,6 +91,24 @@ npm run terms -- inspect --escrow <ESCROW_PDA> --terms terms.json               
 
 Note on SBPF: `cargo-build-sbf` 4.4 defaults to SBPF v3, while `solana-test-validator` 4.x activates SIMD-0500 (no new v0–v2 deploys). Devnet does not have SIMD-0500 active, so the project builds v1 and `scripts/localnet.sh` deactivates that one feature locally to match devnet.
 
+## Web UI
+
+```bash
+./scripts/localnet.sh            # or any running local validator with the program deployed
+npm run web                      # http://localhost:5173
+./scripts/e2e.sh                 # Playwright: happy path + refund path in a real browser (~30 s)
+```
+
+Three tabs, one app. Header: cluster switch (localnet/devnet), **Act as** (browser wallet such as Phantom, auto-detected through Wallet Standard; on localnet also burner sponsor/contributor/third-party keys with an airdrop button), balance, and a banner showing the program ID and whether it is deployed on that cluster.
+
+1. **Sponsor: compile & fund.** Loads the Fine Print packet (demo packet or uploaded JSON). Shows the BLOCKED verdict with the conflicting quotes, a resolver per recorded conflict, then the compiled terms with a clause citation on every field, the disclosures and the doc digest. "Demo speed" swaps the packet dates for now+N minutes and labels every changed quote. **Create & fund** simulates first and shows the program's error name instead of asking for a signature that would fail.
+2. **Contributor: verify & accept.** Loads the escrow and the terms document (from the share link's URL fragment, localStorage, or an uploaded JSON). It recomputes `terms_hash` from on-chain fields, checks the document against `doc_digest` and every field, and confirms you are the invited wallet. **Accept** stays disabled until every check passes and the sponsor-discretion disclosure is acknowledged. Then submit evidence (only its SHA-256 goes on-chain).
+3. **Escrow status.** A timeline of Funded → Accepted → Submitted → Approved → Paid/Refunded with execution times and deadlines in local time and UTC, the governing clause ID and quote under each deadline, a live `can_*` table with reasons and clause IDs, and role-appropriate buttons (approve/cancel for the sponsor; pay/refund/sweep for anyone). It also gives a share link that carries the terms document.
+
+Screenshots from the e2e run: `docs/screens/`.
+
+Phantom is wired via `@solana/wallet-adapter-react` but has not been exercised in this headless environment; the e2e tests use the localnet burner wallets, which use the same transaction path apart from signing.
+
 ## Demo (3 minutes)
 
 `./scripts/localnet.sh` runs this script, with the deadlines shortened to seconds and labeled `[demo speed]`:
@@ -106,6 +127,12 @@ Note on SBPF: `cargo-build-sbf` 4.4 defaults to SBPF v3, while `solana-test-vali
 ## Review log
 
 - 2026-10-01: Codex (offline source review) found no unauthorized drain path and confirmed SDK byte layouts/discriminators match the program. Fixed from its findings: adapter now rejects timezone-free or impossible instants, non-discretionary payment promises, a contributor wallet that differs from the bound one, and out-of-range amounts/IDs; the doc-vs-chain check verifies ISO labels against numeric deadlines; SDK validates u8/u64 ranges, account size/schema/state, owner and PDA; program gained `sweep_excess` so unsolicited lamports are not stranded. Still open: SDK-instruction parity tests inside LiteSVM (today covered by the live-validator demo), full state×action matrix, CI that builds the `.so` before tests.
+
+## Devnet status
+
+Program binary: `target/deploy/clauselock.so` sha256 `c0d51912cc479567efc3b07814b3906a0efc7fa701f1a550ca09af61351cdcd2` (rebuilt from a clean toolchain on 2026-10-03 with an identical hash).
+
+Not deployed yet: the public devnet faucet rate-limits this environment (HTTP 429), the PoW faucets are empty, and the remaining faucets need a GitHub login. The program is ~190 KB, so deployment needs ~1.4 devnet SOL (`solana rent 190248` = 1.325 SOL). `scripts/airdrop-retry.sh` retries every 20 minutes and deploys automatically once funded; or fund `dwjTQRGhix78DWoJVsBrn15Gt9Tyuf6x36wdcsx34Z5` with devnet SOL and run `scripts/deploy-devnet.sh` then `npm run demo -- --cluster devnet`.
 
 ## Roadmap
 

@@ -6,7 +6,7 @@
  *
  * compileTerms() refuses to emit terms while any executable field is missing or contested.
  */
-import {createHash} from 'node:crypto'
+import {sha256} from '@noble/hashes/sha2.js'
 
 export type Clause = {_id: string; topic: string; source: string; quote: string; normalized?: Record<string, any> | null}
 export type RuleSource = {_id: string; title: string; url: string; kind: string; precedenceRank: number; precedenceQuote?: string}
@@ -31,7 +31,8 @@ export function canonicalJson(v: unknown): string {
   }
   throw new Error('canonical JSON: unsupported ' + typeof v)
 }
-export const digestHex = (doc: unknown) => createHash('sha256').update(canonicalJson(doc), 'utf8').digest('hex')
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+export const digestHex = (doc: unknown) => hex(sha256(new TextEncoder().encode(canonicalJson(doc))))
 
 /** Instants must be explicit: YYYY-MM-DDTHH:MM:SS(.sss)?(Z|±HH:MM). Timezone-free strings are rejected. */
 const INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/
@@ -163,4 +164,18 @@ export function checkDocAgainstChain(doc: TermsDoc, chain: {sponsor: string; con
   ]
   for (const [k, a, b] of pairs) if (a !== b) errs.push(`${k}: document says ${a}, chain says ${b}`)
   return errs
+}
+
+/**
+ * Demo-speed copy of a packet: replaces deadline instants with now+offset seconds and annotates every
+ * changed quote so nobody mistakes demo deadlines for the real ones. Optionally overrides the reward.
+ */
+export function withDemoDeadlines(packet: Packet, nowSec: number, offsets: Partial<Record<'accept_by' | 'submit_by' | 'review_by', number>>, rewardLamports?: string): Packet {
+  const p: Packet = structuredClone(packet)
+  for (const c of p.clauses) {
+    const f = c.normalized?.field as string
+    if (f in offsets) { c.normalized!.instant = new Date((nowSec + (offsets as any)[f]) * 1000).toISOString(); c.quote += ` [demo speed: now+${(offsets as any)[f]}s]` }
+    if (f === 'amount' && rewardLamports) { c.normalized!.lamports = rewardLamports; c.quote += ` [demo amount: ${Number(rewardLamports) / 1e9} SOL]` }
+  }
+  return p
 }

@@ -4,16 +4,18 @@
  * - instruction builders, account decoder,
  * - deterministic `can*` explainers that cite the terms clauses behind every verdict.
  */
-import {createHash} from 'node:crypto'
+import {sha256 as nobleSha256} from '@noble/hashes/sha2.js'
+import {Buffer} from 'buffer'
 import {PublicKey, SystemProgram, TransactionInstruction} from '@solana/web3.js'
 
-export const PROGRAM_ID = new PublicKey(process.env.CLAUSELOCK_PROGRAM_ID ?? 'B5qem1S6padkAWwpAYzHeNDjnPHN6NHdmWRuacgvdgDu')
+export const PROGRAM_ID = new PublicKey((typeof process !== 'undefined' && process.env?.CLAUSELOCK_PROGRAM_ID) || 'B5qem1S6padkAWwpAYzHeNDjnPHN6NHdmWRuacgvdgDu')
 export const SCHEMA_VERSION = 1
 export const MIN_AMOUNT = 1_000_000n
 export const REFUND_TO_SPONSOR_ON_EXPIRY = 0
 const TERMS_DOMAIN = Buffer.from('CLAUSELOCK_TERMS_V1')
 
-export const sha256 = (b: Uint8Array | string) => createHash('sha256').update(b).digest()
+/** Isomorphic (Node + browser) SHA-256 returning a Buffer. */
+export const sha256 = (b: Uint8Array | string) => Buffer.from(nobleSha256(typeof b === 'string' ? new TextEncoder().encode(b) : b))
 const disc = (name: string) => sha256(`global:${name}`).subarray(0, 8)
 const ACCOUNT_DISC = sha256('account:Escrow').subarray(0, 8)
 
