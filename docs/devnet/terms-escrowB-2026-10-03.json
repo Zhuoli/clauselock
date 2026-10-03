@@ -1,0 +1,86 @@
+{
+  "schema": "clauselock-terms/v1",
+  "bounty": {
+    "_id": "bounty.demo-escrow-explainer",
+    "title": "Write a Solana escrow explainer (demo bounty)",
+    "url": "https://example.org/bounties/escrow-explainer"
+  },
+  "parties": {
+    "sponsor": "AeyT6JJWikyHYM26Ygs6NbSHxDjhYBo24wNDzUcqjwUY",
+    "contributor": "8got9vQZSVhJp5EzDEFA1uy1SEJrCa9RcG2jaTzw1gt6"
+  },
+  "escrow_id": "1791015426012",
+  "amount_lamports": "50000000",
+  "accept_by": "1791015444",
+  "submit_by": "1791015459",
+  "review_by": "1791015474",
+  "accept_by_iso": "2026-10-03T08:17:24.000Z",
+  "submit_by_iso": "2026-10-03T08:17:39.000Z",
+  "review_by_iso": "2026-10-03T08:17:54.000Z",
+  "refund_policy": "refund-to-sponsor-on-expiry",
+  "disclosures": [
+    "Approval is at the sponsor's discretion. If the sponsor does not approve before review_by, anyone can return the reward to the sponsor. ClauseLock prevents hidden term changes and unfunded promises; it does not guarantee payment for submitted work.",
+    "Deadlines are enforced against the Solana cluster clock at transaction execution time: actions must execute strictly before their deadline; refunds open at the deadline."
+  ],
+  "field_clauses": {
+    "amount": "clause.demo.reward",
+    "contributor": "clause.demo.contributor",
+    "accept_by": "clause.demo.accept",
+    "submit_by": "clause.demo.deadline.terms",
+    "review_by": "clause.demo.review",
+    "refund_policy": "clause.demo.refund",
+    "discretion": "clause.demo.discretion"
+  },
+  "clauses": [
+    {
+      "id": "clause.demo.reward",
+      "source": "Bounty Terms",
+      "url": "https://example.org/bounties/escrow-explainer/terms",
+      "quote": "The reward is 1 SOL, held in escrow and paid only to the invited contributor. [demo amount: 0.05 SOL]"
+    },
+    {
+      "id": "clause.demo.contributor",
+      "source": "Bounty Terms",
+      "url": "https://example.org/bounties/escrow-explainer/terms",
+      "quote": "This bounty is offered to one invited contributor, identified by their wallet address."
+    },
+    {
+      "id": "clause.demo.accept",
+      "source": "Bounty Terms",
+      "url": "https://example.org/bounties/escrow-explainer/terms",
+      "quote": "The invited contributor must accept these Terms by October 5, 2026, 11:59 PM PT. [demo speed: now+15s]"
+    },
+    {
+      "id": "clause.demo.deadline.terms",
+      "source": "Bounty Terms",
+      "url": "https://example.org/bounties/escrow-explainer/terms",
+      "quote": "Submissions must be received by October 12, 2026, 11:59 PM PT. [demo speed: now+30s]"
+    },
+    {
+      "id": "clause.demo.review",
+      "source": "Bounty Terms",
+      "url": "https://example.org/bounties/escrow-explainer/terms",
+      "quote": "The Sponsor will approve or decline the submission by October 19, 2026, 11:59 PM PT. [demo speed: now+45s]"
+    },
+    {
+      "id": "clause.demo.refund",
+      "source": "Bounty Terms",
+      "url": "https://example.org/bounties/escrow-explainer/terms",
+      "quote": "If the work is not approved by the review date, or a deadline passes before the next step, the reward returns to the Sponsor."
+    },
+    {
+      "id": "clause.demo.discretion",
+      "source": "Bounty Terms",
+      "url": "https://example.org/bounties/escrow-explainer/terms",
+      "quote": "Approval is at the Sponsor's sole discretion."
+    }
+  ],
+  "resolutions": [
+    {
+      "conflict": "conflict.demo.deadline",
+      "title": "Listing says Oct 14, Terms say Oct 12, 11:59 PM PT",
+      "winningClaim": "clause.demo.deadline.terms",
+      "resolvedBy": "sponsor"
+    }
+  ]
+}

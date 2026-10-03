@@ -1,0 +1,71 @@
+{
+  "cluster": "devnet",
+  "programId": "B5qem1S6padkAWwpAYzHeNDjnPHN6NHdmWRuacgvdgDu",
+  "escrowA": "5T8EykMGpCqEpka3LRP6U4JaZN2qDjZiPPjX3K7X5K4n",
+  "escrowB": "4A4oXYjeNGKkTVESqE6cdRqCawWaHw374oeiDHph3FRU",
+  "termsHashA": "112067e5763d9923654d4d06d01acd549ef7175831e3c023a8563fd501e326d8",
+  "docDigestA": "4f9c7ac7f0798d814f731f2d707690dd32c6db48486b4f834062c03079b5c0d6",
+  "receipts": [
+    {
+      "label": "fund demo wallets from deployer",
+      "sig": "9Ea5aVtQYM4Rq2ep3rSmy6xMHRDfjbmXQgK32ftskbjKK2tYZMGFoC3XAvdMoPMoxrRnkoac33GV5pdv9Vr1GNX",
+      "feePayer": "dwjTQRGhix78DWoJVsBrn15Gt9Tyuf6x36wdcsx34Z5"
+    },
+    {
+      "label": "fund demo wallets from deployer",
+      "sig": "4GqYte12zkPFeS2hvgrzePeXxUMWtwzMizv3pZDpMwSRK4yHf3vEakkgLEy6UpNrnpP1TfNfuco9vM2XScC3477R",
+      "feePayer": "dwjTQRGhix78DWoJVsBrn15Gt9Tyuf6x36wdcsx34Z5"
+    },
+    {
+      "label": "create_fund",
+      "sig": "3Noe9RGSvxyiCo1fiTyxj95dj1YpUTorazAUbZZDoGj5oCyFA3tmhnKjnvJBuxKyLznsCqx7a6JAzQovzrybYvkb",
+      "feePayer": "AeyT6JJWikyHYM26Ygs6NbSHxDjhYBo24wNDzUcqjwUY"
+    },
+    {
+      "label": "accept with the listing's later deadline",
+      "rejectedWith": "TermsMismatch"
+    },
+    {
+      "label": "accept",
+      "sig": "PVt9mzN7iGE41wkc88knQWsgVUuZkWctmvDWZizeEPNaBzWW6RVM612QLSV929yUWRSJh8aeLdH3WZLbMP77hnd",
+      "feePayer": "8got9vQZSVhJp5EzDEFA1uy1SEJrCa9RcG2jaTzw1gt6"
+    },
+    {
+      "label": "submit_evidence",
+      "sig": "4zBGLr4NZSbCfTZzbFHskAKiHFfDozoutGy6qqQBL6CUTb8atpKwG2dnqRNomyETCyV1WxUzjx7MZLbXLazyYv4u",
+      "feePayer": "8got9vQZSVhJp5EzDEFA1uy1SEJrCa9RcG2jaTzw1gt6"
+    },
+    {
+      "label": "approve",
+      "sig": "gJQzWygFvo4nmjHM8LKWKzUXpt29Pf7n2kpCREdfQYBJuQcFqMzSCYGVs7JkGfXKQ9hPX7Mu7bsMzBLngLJUwcQ",
+      "feePayer": "AeyT6JJWikyHYM26Ygs6NbSHxDjhYBo24wNDzUcqjwUY"
+    },
+    {
+      "label": "refund after approval",
+      "rejectedWith": "ApprovedCannotRefund"
+    },
+    {
+      "label": "finalize_payment (signed by third party)",
+      "sig": "Gu7yPxATjPbnAjcBYwpAGk2QjqhBy87HJF3zaT81SjcYwM13JMTx1UaxmDQqJ6QrpejCnRt8rP9kx5sBcWjJb1S",
+      "feePayer": "37KxhuKuVn2TGu3ifATYQtG68xWdKCgfnrXzJUve3x39"
+    },
+    {
+      "label": "second payout",
+      "rejectedWith": "WrongState"
+    },
+    {
+      "label": "create_fund (B)",
+      "sig": "5FvugufBigjhcVFx8C1M5PkmMjqct2QfKvaypzFyVFdmK6U56nwPUrnWEiVizMnJuiyC52qLxpinTQs7JUmZY7tF",
+      "feePayer": "AeyT6JJWikyHYM26Ygs6NbSHxDjhYBo24wNDzUcqjwUY"
+    },
+    {
+      "label": "early refund",
+      "rejectedWith": "RefundNotYetAvailable"
+    },
+    {
+      "label": "finalize_refund (B, signed by third party)",
+      "sig": "37Ck6jkUXfCH5MDzjPJ5u4cFcW6A1XvZA1kPYnWfFw4eecyRw7nc5qB6ogPQPUhAZqdokvuXCtuzX22fD9NwiAXH",
+      "feePayer": "37KxhuKuVn2TGu3ifATYQtG68xWdKCgfnrXzJUve3x39"
+    }
+  ]
+}

@@ -132,11 +132,29 @@ Phantom is wired via `@solana/wallet-adapter-react` but has not been exercised i
 
 Program binary: `target/deploy/clauselock.so` sha256 `c0d51912cc479567efc3b07814b3906a0efc7fa701f1a550ca09af61351cdcd2` (rebuilt from a clean toolchain on 2026-10-03 with an identical hash).
 
-Not deployed yet: the public devnet faucet rate-limits this environment (HTTP 429), the PoW faucets are empty, and the remaining faucets need a GitHub login. The program is ~190 KB, so deployment needs ~1.4 devnet SOL (`solana rent 190248` = 1.325 SOL). `scripts/airdrop-retry.sh` retries every 20 minutes and deploys automatically once funded; or fund `dwjTQRGhix78DWoJVsBrn15Gt9Tyuf6x36wdcsx34Z5` with devnet SOL and run `scripts/deploy-devnet.sh` then `npm run demo -- --cluster devnet`.
+**Deployed on Solana devnet** (2026-10-03, slot 506931199):
+
+- Program: [`B5qem1S6padkAWwpAYzHeNDjnPHN6NHdmWRuacgvdgDu`](https://explorer.solana.com/address/B5qem1S6padkAWwpAYzHeNDjnPHN6NHdmWRuacgvdgDu?cluster=devnet) (BPF upgradeable loader; ProgramData `HoLLuA4GanpBNEqHtJ1gtcoEFUP1XANRkamabxVbduay`)
+- Deploy tx: [`4oDggLti…1YeEp`](https://explorer.solana.com/tx/4oDggLtibAUp5dF46hhRhawkEEbboAQA663JfUipf9CZtKPMhWcd5qy7y5dmzvDiPW2QRsJGrXEsHRMeFMt1YeEp?cluster=devnet)
+- Upgrade authority: retained by the deployer `dwjTQRGhix78DWoJVsBrn15Gt9Tyuf6x36wdcsx34Z5` during development; it will be frozen (`--final`) after the reviewed release.
+
+Full demo run on devnet (`npm run demo -- --cluster devnet`, 0.05 SOL rewards). Receipts: [`docs/devnet/demo-receipts-2026-10-03.json`](docs/devnet/demo-receipts-2026-10-03.json).
+
+| Step | Transaction |
+|---|---|
+| Escrow A `create_fund` | [3Noe9RGS…rybYvkb](https://explorer.solana.com/tx/3Noe9RGSvxyiCo1fiTyxj95dj1YpUTorazAUbZZDoGj5oCyFA3tmhnKjnvJBuxKyLznsCqx7a6JAzQovzrybYvkb?cluster=devnet) |
+| Escrow A `accept` (exact terms hash; a mismatched hash is rejected with `TermsMismatch`) | [PVt9mzN7…77hnd](https://explorer.solana.com/tx/PVt9mzN7iGE41wkc88knQWsgVUuZkWctmvDWZizeEPNaBzWW6RVM612QLSV929yUWRSJh8aeLdH3WZLbMP77hnd?cluster=devnet) |
+| Escrow A `submit_evidence` | [4zBGLr4N…zb4u](https://explorer.solana.com/tx/4zBGLr4NZSbCfTZzbFHskAKiHFfDozoutGy6qqQBL6CUTb8atpKwG2dnqRNomyETCyV1WxUzjx7MZLbXLazyYv4u?cluster=devnet) |
+| Escrow A `approve` | [gJQzWygF…LngLJUwcQ](https://explorer.solana.com/tx/gJQzWygFvo4nmjHM8LKWKzUXpt29Pf7n2kpCREdfQYBJuQcFqMzSCYGVs7JkGfXKQ9hPX7Mu7bsMzBLngLJUwcQ?cluster=devnet) |
+| Escrow A `finalize_payment` (signed by an unrelated third party) | [Gu7yPxAT…Jb1S](https://explorer.solana.com/tx/Gu7yPxATjPbnAjcBYwpAGk2QjqhBy87HJF3zaT81SjcYwM13JMTx1UaxmDQqJ6QrpejCnRt8rP9kx5sBcWjJb1S?cluster=devnet) |
+| Escrow B `create_fund` (nobody accepts) | [5FvugufB…ZmY7tF](https://explorer.solana.com/tx/5FvugufBigjhcVFx8C1M5PkmMjqct2QfKvaypzFyVFdmK6U56nwPUrnWEiVizMnJuiyC52qLxpinTQs7JUmZY7tF?cluster=devnet) |
+| Escrow B `finalize_refund` after `accept_by` (third party) | [37Ck6jkU…NfD9NwiAXH](https://explorer.solana.com/tx/37Ck6jkUXfCH5MDzjPJ5u4cFcW6A1XvZA1kPYnWfFw4eecyRw7nc5qB6ogPQPUhAZqdokvuXCtuzX22fD9NwiAXH?cluster=devnet) |
+
+To redeploy elsewhere: fund a deployer with ~1.4 devnet SOL (`solana rent 190248` = 1.325 SOL), then run `scripts/deploy-devnet.sh` and `npm run demo -- --cluster devnet`.
 
 ## Roadmap
 
-SPL/USDC rewards; wallet-adapter web UI (sponsor and contributor views) on top of the SDK; freeze the reviewed deployment; multi-milestone and multi-contributor variants; optional arbiter for disputes.
+SPL/USDC rewards; Phantom click-through of the web UI on devnet; freeze the reviewed deployment; multi-milestone and multi-contributor variants; optional arbiter for disputes.
 
 ## License
 
