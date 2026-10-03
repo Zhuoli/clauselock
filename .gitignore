@@ -11,3 +11,5 @@ receipts/terms-*.json
 web/dist
 test-results
 playwright-report
+video/out/
+video/out-demo/

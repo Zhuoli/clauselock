@@ -65,6 +65,8 @@ Cross-language test vectors: [`vectors/terms-hash-v1.json`](vectors/terms-hash-v
 | `vectors/` | Terms-hash test vectors |
 | `web/` | Vite + React web UI (Phantom via Wallet Standard, localnet burner wallets), Playwright e2e tests |
 | `scripts/e2e.sh` | Local validator + deploy + browser tests |
+| `video/` | Scripted pitch and demo video pipeline (Playwright + edge-tts + ffmpeg) |
+| `docs/COLOSSEUM_SUBMISSION.md` | Draft answers for the Colosseum submission form |
 | `scripts/airdrop-retry.sh` | Spaced devnet faucet retries; deploys and runs the devnet demo once funded |
 
 ## Run it
@@ -107,9 +109,22 @@ Three tabs, one app. Header: cluster switch (localnet/devnet), **Act as** (brows
 
 Screenshots from the e2e run: `docs/screens/`.
 
-Phantom is wired via `@solana/wallet-adapter-react` but has not been exercised in this headless environment; the e2e tests use the localnet burner wallets, which use the same transaction path apart from signing.
+Phantom is wired via `@solana/wallet-adapter-react` but has not yet been clicked through by hand on devnet; the e2e tests use the localnet burner wallets, which use the same transaction path apart from signing.
 
-## Demo (3 minutes)
+## Videos
+
+- [`docs/pitch.mp4`](docs/pitch.mp4) (2:41): pitch (problem, solution, live UI walkthrough, devnet proof, business).
+- [`docs/demo.mp4`](docs/demo.mp4) (2:46): technical demo (architecture, program, on-chain terms hash, UI, tests).
+
+Both are generated end to end on a Linux box with no person on camera: `video/record.ts` drives the web UI in Chrome via Playwright against a local validator with burner wallets (same program binary as devnet) and renders the slides; `video/tts.sh` makes the voiceover with edge-tts; `video/build.py` aligns the audio to each scene, burns in captions and encodes with ffmpeg. Narration text: `video/narration*.json`.
+
+```bash
+./video/tts.sh && NAR=narration-demo.json OUT=out-demo RATE=+11% ./video/tts.sh
+# with a local validator (program deployed) and `npm run web` running:
+(cd video && npx tsx record.ts && python3 build.py && NAR=narration-demo.json OUT=out-demo npx tsx record.ts && OUT=out-demo MP4=demo.mp4 python3 build.py)
+```
+
+## Demo script (3 minutes)
 
 `./scripts/localnet.sh` runs this script, with the deadlines shortened to seconds and labeled `[demo speed]`:
 1. Fine Print reads the packet: **BLOCKED**, listing "Deadline: October 14" vs Terms "October 12, 2026, 11:59 PM PT", both quoted with sources.
@@ -126,6 +141,7 @@ Phantom is wired via `@solana/wallet-adapter-react` but has not been exercised i
 
 ## Review log
 
+- 2026-10-03: Codex reviewed the web UI ([`docs/codex-ui-review-2026-10-03.md`](docs/codex-ui-review-2026-10-03.md), 12 findings). Fixed: every action is built from the loaded account snapshot (editing the address no longer retargets a signature); views remount on a cluster change and stale RPC responses are dropped; the status page uses only a terms document that verifies against the account (otherwise quotes are hidden, approval is blocked and the share link omits it); the fund button and summary show the compiled amount, rent and cluster; transaction errors are classified (program / wallet / RPC / sent-but-unconfirmed with the signature kept) and one blockhash is used end to end; in-flight guards on every action; periodic state, time and balance refresh, with a label when the computer clock stands in for cluster time; stale demo deadlines block funding until recomputed; JSON, URL and number inputs are validated; the sponsor can check the evidence text against the on-chain hash; labels, live regions and keyboard-accessible citations.
 - 2026-10-01: Codex (offline source review) found no unauthorized drain path and confirmed SDK byte layouts/discriminators match the program. Fixed from its findings: adapter now rejects timezone-free or impossible instants, non-discretionary payment promises, a contributor wallet that differs from the bound one, and out-of-range amounts/IDs; the doc-vs-chain check verifies ISO labels against numeric deadlines; SDK validates u8/u64 ranges, account size/schema/state, owner and PDA; program gained `sweep_excess` so unsolicited lamports are not stranded. Still open: SDK-instruction parity tests inside LiteSVM (today covered by the live-validator demo), full state×action matrix, CI that builds the `.so` before tests.
 
 ## Devnet status

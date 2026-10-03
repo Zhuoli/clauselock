@@ -1,0 +1,38 @@
+[
+ {
+  "id": "title",
+  "text": "Bounties and contests promise rewards. But the deadline on the listing page, the official terms, and what actually gets paid can all be different. ClauseLock fixes that. The terms you read are the terms that execute."
+ },
+ {
+  "id": "problem",
+  "text": "Today a contributor reads a listing, does the work, and hopes. The sponsor may hold the reward off chain, change the terms later, or never fund it at all. And when two documents disagree, nobody knows which one counts until there is a dispute."
+ },
+ {
+  "id": "solution",
+  "text": "ClauseLock has two parts. Fine Print, an AI rules reader, extracts every deadline and amount from the bounty documents, with a verbatim quote and source for each one, and it refuses to continue while sources conflict. Then a Solana escrow program locks the compiled terms: the reward, the parties, and three deadlines, committed as one hash computed on chain."
+ },
+ {
+  "id": "blocked",
+  "text": "Here is the sponsor view. Fine Print found that the listing says October fourteenth, but the official terms say October twelfth, at eleven fifty nine Pacific. Funding is blocked until the sponsor decides."
+ },
+ {
+  "id": "fund",
+  "text": "The sponsor picks the official terms. Every field now cites the clause it came from, and the document gets a digest. One click simulates the transaction first, then funds the escrow. The reward now sits in a program owned account, not in a promise."
+ },
+ {
+  "id": "accept",
+  "text": "The contributor opens the share link. The app recomputes the terms hash from on chain fields, checks the document against its digest, and confirms this is the invited wallet. Accept stays disabled until every check passes. Accepting signs that exact hash, so if anything differs, the program rejects it."
+ },
+ {
+  "id": "settle",
+  "text": "The contributor submits evidence, and only its hash goes on chain. The sponsor approves, and approval is irrevocable. Now anyone, even an unrelated third wallet, can trigger the payment. If a deadline passes with nothing done, anyone can trigger the refund instead. Nobody can redirect the funds."
+ },
+ {
+  "id": "devnet",
+  "text": "This walkthrough ran on a local validator with test wallets. The same program is deployed on Solana devnet, where the full scripted demo ran: one escrow paid, one refunded, and every invalid action rejected by the program. The Explorer links are in the repo."
+ },
+ {
+  "id": "close",
+  "text": "Solana makes this practical: fees are a fraction of a cent, confirmation takes seconds, and anyone can verify the state. The program stays free and open. Revenue comes from a paid workspace for repeat sponsors, and later a small settlement fee, starting with hackathons, grant programs, and bug bounties. ClauseLock is built by solo developer Zhuoli Liang, and it is open source on GitHub."
+ }
+]

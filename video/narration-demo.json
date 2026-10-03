@@ -1,0 +1,38 @@
+[
+ {
+  "id": "d_arch",
+  "text": "This is the technical walkthrough of ClauseLock. There are three layers. A Fine Print adapter in TypeScript turns a rule packet into a canonical terms document. An Anchor program on Solana holds the reward and enforces the deadlines. And a React web app talks to the program through a small TypeScript SDK and any Wallet Standard wallet, such as Phantom."
+ },
+ {
+  "id": "d_program",
+  "text": "Each escrow is a PDA, seeded by the sponsor and an escrow id. Create fund moves the reward in, on top of the rent exempt reserve. The state machine runs from funded to accepted, submitted, approved, and paid, or refunded. Every transition checks the Solana clock: positive actions need now before the deadline, and expiry needs now at or after it. Destinations are pinned with has one constraints, so any wallet can settle, but nobody can redirect."
+ },
+ {
+  "id": "d_hash",
+  "text": "The key design choice: the program computes the terms hash itself, from the stored fields plus the digest of the canonical document. The client never supplies it. Accept takes the expected hash as an argument, so the contributor signs exactly what their own client recomputed. Rust, TypeScript, and an independent Python implementation share test vectors."
+ },
+ {
+  "id": "blocked",
+  "text": "In the app, the adapter runs a conflict gate. Two clauses claim the submission deadline, so compile returns blocked, with both quotes and their clause ids, and there is no fund button yet."
+ },
+ {
+  "id": "fund",
+  "text": "After the sponsor picks the winning clause, the document is canonicalized and hashed. The summary shows the reward, the rent that stays in the account, and the cluster. Every button simulates first, so a program error is shown by name instead of asking for a signature."
+ },
+ {
+  "id": "accept",
+  "text": "The contributor view checks the account owner, the PDA, and the schema, recomputes the terms hash from on chain fields, and compares every field of the document with the chain. Actions are bound to the loaded snapshot, so editing the address cannot retarget a signature."
+ },
+ {
+  "id": "settle",
+  "text": "Evidence goes on chain as a SHA two fifty six hash, and the sponsor can check the text they received against it. Approval is irrevocable. Finalize payment is signed here by a third wallet, and the timeline shows who settled, with each deadline and its clause."
+ },
+ {
+  "id": "d_tests",
+  "text": "Twenty three LiteSVM tests set the clock to one second before, at, and after each deadline, and cover wrong signers, wrong destinations, replay, and double payout. Two Playwright tests drive this UI on a local validator. On devnet, the scripted demo ran both settlement paths and the four expected rejections, with Explorer links in the repo."
+ },
+ {
+  "id": "d_close",
+  "text": "Trade offs: native SOL only for now, and one invited contributor per escrow, to avoid squatting. The upgrade authority is retained and disclosed until the reviewed release is frozen. Next come SPL tokens, milestones, and an audit."
+ }
+]
