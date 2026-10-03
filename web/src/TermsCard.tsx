@@ -1,13 +1,27 @@
+import {useState} from 'react'
 import type {TermsDoc} from '../../fineprint/adapter.ts'
-import {fmtLocal, fmtUtc, short, sol, tzName} from './lib'
+import {explorerTx, fmtLocal, fmtUtc, short, sol, tzName, TX_KIND_LABEL, type ClusterName, type TxResult} from './lib'
 
 const FIELD_LABEL: Record<string, string> = {amount: 'Reward', contributor: 'Contributor', accept_by: 'Accept by', submit_by: 'Submit by', review_by: 'Sponsor decides by', refund_policy: 'If not approved', discretion: 'Approval'}
 
 export function Citation({doc, field}: {doc: TermsDoc; field: string}) {
   const id = (doc.field_clauses as any)[field]
   const c = doc.clauses.find((x) => x.id === id)
+  const [open, setOpen] = useState(false)
   if (!c) return null
-  return <span className="cite" title={`${c.source}: "${c.quote}"`}>[{id}]</span>
+  // A real button: keyboard-focusable, and the quote is revealed inline (not only in a hover tooltip).
+  return <>
+    <button type="button" className="cite" aria-expanded={open} title={`${c.source}: "${c.quote}"`} onClick={() => setOpen(!open)}>[{id}]</button>
+    {open && <span className="quote" role="note"> {c.source}: “{c.quote}”</span>}
+  </>
+}
+
+/** Transaction feedback with live-region semantics. testid prefix keeps the e2e selectors: `${p}-ok` / `${p}-error`. */
+export function TxFeedback({result, cluster, p, okLabel = 'Confirmed'}: {result: TxResult | null; cluster: ClusterName; p: string; okLabel?: string}) {
+  if (!result) return null
+  if (result.ok) return <p className="good" role="status" data-testid={`${p}-ok`}>{okLabel} · <a href={explorerTx(cluster, result.sig)} target="_blank" rel="noreferrer">{result.sig.slice(0, 16)}… (Explorer)</a></p>
+  return <p className={result.kind === 'pending' ? 'warn' : 'bad'} role="alert" data-testid={`${p}-error`}>{TX_KIND_LABEL[result.kind]}: <b>{result.error}</b>
+    {result.sig && <> · <a href={explorerTx(cluster, result.sig)} target="_blank" rel="noreferrer">{result.sig.slice(0, 16)}…</a></>}</p>
 }
 
 export function Time({t}: {t: string | bigint | number}) {

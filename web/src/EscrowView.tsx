@@ -1,10 +1,10 @@
-import {useEffect, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import {PublicKey, type TransactionInstruction} from '@solana/web3.js'
 import * as cl from '../../sdk/index.ts'
 import type {TermsDoc} from '../../fineprint/adapter.ts'
 import {useApp} from './App'
-import {chainNow, explorerTx, fetchEscrow, loadTerms, run, shareLink, short, sol, termsFromHash, type TxResult} from './lib'
-import {Citation, Time} from './TermsCard'
+import {chainTime, fetchEscrow, isPubkey, loadTerms, run, shareLink, short, sol, termsFromHash, verifyDoc, type TxResult} from './lib'
+import {Citation, Time, TxFeedback} from './TermsCard'
 
 type Step = {key: string; label: string; at?: bigint; deadline?: bigint; field?: string; done: boolean; note?: string}
 
@@ -25,78 +25,113 @@ export function timeline(e: cl.Escrow): Step[] {
   return steps
 }
 
+type Snap = {pda: PublicKey; escrow: cl.Escrow; lamports: number; now: bigint; fromChain: boolean}
+
 export function EscrowView({escrow, setEscrow}: {escrow: string; setEscrow: (s: string) => void}) {
-  const {cluster, conn, actor} = useApp()
+  const {cluster, conn, actor, refreshBalance} = useApp()
   const [input, setInput] = useState(escrow)
-  const [data, setData] = useState<{escrow: cl.Escrow; lamports: number} | null>(null)
+  const [snap, setSnap] = useState<Snap | null>(null)
   const [doc, setDoc] = useState<TermsDoc | null>(null)
-  const [now, setNow] = useState(0n)
   const [err, setErr] = useState('')
   const [result, setResult] = useState<TxResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [evidenceText, setEvidenceText] = useState('')
+  const req = useRef(0)
 
-  const load = async (pda = input) => {
-    if (!pda) return
+  const load = async (addr: string) => {
+    if (!addr) return
+    const id = ++req.current
+    if (!isPubkey(addr)) { setErr('Not a valid escrow address.'); setSnap(null); return }
     try {
-      const r = await fetchEscrow(conn, new PublicKey(pda))
-      if (!r) { setErr('No escrow at that address on this cluster.'); setData(null); return }
-      setErr(''); setData(r); setEscrow(pda); setNow(await chainNow(conn)); setDoc(termsFromHash() ?? loadTerms(pda))
-    } catch (e: any) { setErr(e.message) }
+      const pda = new PublicKey(addr)
+      const r = await fetchEscrow(conn, pda); const {t, fromChain} = await chainTime(conn)
+      if (id !== req.current) return // superseded by a newer load
+      if (!r) { setErr('No escrow at that address on this cluster.'); setSnap(null); return }
+      setErr(''); setSnap({pda, escrow: r.escrow, lamports: r.lamports, now: t, fromChain}); setEscrow(addr); setDoc(termsFromHash() ?? loadTerms(addr))
+      setEvidenceText((v) => v || localStorage.getItem(`clauselock:evidence:${addr}`) || '')
+    } catch (e: any) { if (id === req.current) { setErr(e?.message ?? String(e)); setSnap(null) } }
   }
-  useEffect(() => { load(escrow); const t = setInterval(() => load(), 5000); return () => clearInterval(t) }, [escrow, conn])
+  const loaded = snap?.pda.toBase58() ?? ''
+  const busyRef = useRef(false); busyRef.current = busy
+  const loadedRef = useRef(''); loadedRef.current = loaded
+  useEffect(() => { load(escrow); const t = setInterval(() => !busyRef.current && load(loadedRef.current || escrow), 5000); return () => clearInterval(t) }, [escrow, conn])
 
-  const e = data?.escrow
-  const pda = e ? new PublicKey(input) : null
-  const cm = doc?.field_clauses ?? {}
-  const act = async (ixs: TransactionInstruction[]) => { if (!actor) return; setResult(null); const r = await run(conn, actor, ixs); setResult(r); await load() }
+  const e = snap?.escrow
+  const v = e ? verifyDoc(doc, e) : null
+  // Only a document that verifies against this account is used for citations, quotes and sharing.
+  const vdoc = v?.verified ? doc : null
+  const cm = vdoc?.field_clauses ?? {}
+  const draftDiffers = !!snap && input !== loaded
+  const act = async (ixs: TransactionInstruction[]) => {
+    if (!actor || !snap || busy) return
+    setBusy(true); setResult(null)
+    try { const r = await run(conn, actor, ixs); setResult(r); await load(loaded); refreshBalance() } finally { setBusy(false) }
+  }
   const isSponsor = !!(actor && e && actor.publicKey.equals(e.sponsor))
-  const quote = (id: string) => doc?.clauses.find((c) => c.id === id)
+  const quote = (id: string) => vdoc?.clauses.find((c) => c.id === id)
+  const evidenceSet = !!e && e.evidenceHash.some((b) => b)
+  const evidenceOk = evidenceSet && !!evidenceText && cl.sha256(evidenceText).equals(e!.evidenceHash)
+  const can = !busy && !draftDiffers
+  const docBad = !!doc && !v?.verified
 
   return (
     <section>
       <h2>Escrow status</h2>
       <div className="row">
-        <input data-testid="status-escrow-input" value={input} onChange={(x) => setInput(x.target.value.trim())} placeholder="escrow address" style={{flex: 1}} />
-        <button data-testid="status-load" onClick={() => load()}>Load</button>
+        <label style={{flex: 1}}>Escrow address
+          <input data-testid="status-escrow-input" value={input} onChange={(x) => setInput(x.target.value.trim())} placeholder="base58 escrow account" /></label>
+        <button data-testid="status-load" onClick={() => { setResult(null); load(input) }}>Load</button>
       </div>
-      {err && <p className="bad">{err}</p>}
-      {e && pda && <div className="grid">
+      {err && <p className="bad" role="alert">{err}</p>}
+      {draftDiffers && <p className="warn" role="status">The address above differs from the loaded escrow {loaded}. Press Load before acting.</p>}
+      {e && snap && <div className="grid">
         <div className="card">
           <h3>State: <span data-testid="status-state">{e.state}</span></h3>
-          <p>Sponsor <code>{short(e.sponsor)}</code> · contributor <code>{short(e.contributor)}</code> · reward {sol(e.amount)} · account balance {sol(data!.lamports)} (reward + rent receipt)</p>
+          <p>Sponsor <code>{short(e.sponsor)}</code> · contributor <code>{short(e.contributor)}</code> · reward {sol(e.amount)} · account balance {sol(snap.lamports)} (reward + rent receipt)</p>
+          {docBad && <p className="bad" role="alert">The terms document you have does not match this escrow ({v!.issues?.[0] ?? 'terms hash mismatch'}). Its quotes are hidden; do not rely on it.</p>}
+          {!doc && <p className="warn">No terms document for this escrow in this browser: deadlines below come from the chain, without clause quotes.</p>}
           <p className="mono">terms_hash {e.termsHash.toString('hex')}<br />doc_digest {Buffer.from(e.docDigest).toString('hex')}</p>
           <ol className="timeline" data-testid="timeline">
             {timeline(e).map((s) => (
-              <li key={s.key} className={s.done ? 'done' : now >= (s.deadline ?? 0n) && s.deadline ? 'missed' : 'pending'}>
+              <li key={s.key} className={s.done ? 'done' : snap.now >= (s.deadline ?? 0n) && s.deadline ? 'missed' : 'pending'}>
                 <b>{s.label}</b> {s.note && <small>{s.note}</small>}
                 {s.at ? <div>at <Time t={s.at} /></div> : null}
-                {s.deadline && <div>deadline <Time t={s.deadline} /> {doc && s.field && <Citation doc={doc} field={s.field} />}
+                {s.deadline && <div>deadline <Time t={s.deadline} /> {vdoc && s.field && <Citation doc={vdoc} field={s.field} />}
                   {s.field && quote((cm as any)[s.field]) && <div className="quote">“{quote((cm as any)[s.field])!.quote}”</div>}</div>}
               </li>
             ))}
           </ol>
-          <p>Cluster time: <Time t={now} /></p>
+          <p>{snap.fromChain ? 'Cluster time' : 'This computer\'s clock (cluster time unavailable)'}: <Time t={snap.now} /></p>
         </div>
         <div className="card">
           <h3>What can happen now</h3>
           <table className="can" data-testid="can-table"><tbody>
             {(['accept', 'submit', 'approve', 'pay', 'refund', 'cancel'] as const).map((a) => {
-              const v = cl.explain(e, now, a, cm)
-              return <tr key={a} className={v.allowed ? 'good' : ''}><th>can_{a}</th><td>{v.allowed ? 'yes' : 'no'}</td><td>{v.reason}{v.clauses.length > 0 && <> <small>[{v.clauses.join(', ')}]</small></>}</td></tr>
+              const x = cl.explain(e, snap.now, a, cm)
+              return <tr key={a} className={x.allowed ? 'good' : ''}><th>can_{a}</th><td>{x.allowed ? 'yes' : 'no'}</td><td>{x.reason}{x.clauses.length > 0 && <> <small>[{x.clauses.join(', ')}]</small></>}</td></tr>
             })}
           </tbody></table>
+          {evidenceSet && <div className="card">
+            <label>Evidence the contributor sent you (checked against the on-chain hash)
+              <textarea data-testid="evidence-check" value={evidenceText} onChange={(x) => setEvidenceText(x.target.value)} /></label>
+            <p className="mono">on-chain evidence_hash {e.evidenceHash.toString('hex')}</p>
+            {evidenceText && <p className={evidenceOk ? 'good' : 'bad'} data-testid="evidence-match" role="status">{evidenceOk ? 'Matches the on-chain evidence hash' : 'Does NOT match the on-chain evidence hash'}</p>}
+          </div>}
           <div className="actions">
-            {e.state === 'Submitted' && <button data-testid="approve" disabled={!isSponsor} onClick={() => act([cl.approveIx(actor!.publicKey, pda)])}>Approve (sponsor)</button>}
-            {e.state === 'Funded' && <button data-testid="cancel" disabled={!isSponsor} onClick={() => act([cl.cancelIx(actor!.publicKey, pda)])}>Cancel offer (sponsor)</button>}
-            {e.state === 'Approved' && <button data-testid="pay" disabled={!actor} onClick={() => act([cl.finalizePaymentIx(actor!.publicKey, pda, e.contributor)])}>Finalize payment (anyone)</button>}
-            {['Funded', 'Accepted', 'Submitted'].includes(e.state) && <button data-testid="refund" disabled={!actor} onClick={() => act([cl.finalizeRefundIx(actor!.publicKey, pda, e.sponsor)])}>Finalize refund (anyone)</button>}
-            {(e.state === 'Paid' || e.state === 'Refunded') && <button className="small" data-testid="sweep" disabled={!actor} onClick={() => act([cl.sweepExcessIx(actor!.publicKey, pda, e.sponsor)])}>Sweep stray SOL to sponsor</button>}
+            {e.state === 'Submitted' && <>
+              <p className="warn">Approval is irrevocable: after it, the reward can only go to the contributor.</p>
+              <button data-testid="approve" disabled={!isSponsor || !can || docBad} onClick={() => act([cl.approveIx(actor!.publicKey, snap.pda)])}>{busy ? 'Waiting…' : 'Approve (sponsor)'}</button></>}
+            {e.state === 'Funded' && <button data-testid="cancel" disabled={!isSponsor || !can} onClick={() => act([cl.cancelIx(actor!.publicKey, snap.pda)])}>Cancel offer (sponsor)</button>}
+            {e.state === 'Approved' && <button data-testid="pay" disabled={!actor || !can} onClick={() => act([cl.finalizePaymentIx(actor!.publicKey, snap.pda, e.contributor)])}>{busy ? 'Waiting…' : 'Finalize payment (anyone)'}</button>}
+            {['Funded', 'Accepted', 'Submitted'].includes(e.state) && <button data-testid="refund" disabled={!actor || !can} onClick={() => act([cl.finalizeRefundIx(actor!.publicKey, snap.pda, e.sponsor)])}>Finalize refund (anyone)</button>}
+            {(e.state === 'Paid' || e.state === 'Refunded') && <button className="small" data-testid="sweep" disabled={!actor || !can} onClick={() => act([cl.sweepExcessIx(actor!.publicKey, snap.pda, e.sponsor)])}>Sweep stray SOL to sponsor</button>}
           </div>
           <p><small>Buttons simulate first; if the program would reject, you see its reason and nothing is signed.</small></p>
-          {result && (result.ok ? <p className="good" data-testid="status-tx-ok">Confirmed · <a target="_blank" href={explorerTx(cluster, result.sig)}>{result.sig.slice(0, 16)}…</a></p>
-            : <p className="bad" data-testid="status-tx-error">Program rejected: <b>{result.error}</b></p>)}
+          <TxFeedback result={result} cluster={cluster} p="status-tx" />
           <h3>Share with the contributor</h3>
-          <input readOnly data-testid="share-link" value={shareLink(cluster, input, doc)} onFocus={(x) => x.target.select()} />
-          {doc && <a download={`clauselock-terms-${input}.json`} href={`data:application/json,${encodeURIComponent(JSON.stringify(doc, null, 2))}`}>Download terms JSON</a>}
+          <label>Share link {vdoc ? '(carries the verified terms document)' : '(no verified terms document to attach)'}
+            <input readOnly data-testid="share-link" value={shareLink(cluster, loaded, vdoc)} onFocus={(x) => x.target.select()} /></label>
+          {vdoc && <a download={`clauselock-terms-${loaded}.json`} href={`data:application/json,${encodeURIComponent(JSON.stringify(vdoc, null, 2))}`}>Download terms JSON</a>}
         </div>
       </div>}
     </section>

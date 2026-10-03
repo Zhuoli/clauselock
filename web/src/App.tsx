@@ -2,19 +2,24 @@ import {createContext, useContext, useEffect, useMemo, useState} from 'react'
 import {Connection, LAMPORTS_PER_SOL} from '@solana/web3.js'
 import {ConnectionProvider, WalletProvider, useConnection, useWallet} from '@solana/wallet-adapter-react'
 import {WalletModalProvider, WalletMultiButton} from '@solana/wallet-adapter-react-ui'
-import {CLUSTERS, burnerActor, programIdFor, readHash, short, sol, type Actor, type ClusterName} from './lib'
+import {CLUSTERS, asCluster, burnerActor, programIdFor, readHash, short, sol, type Actor, type ClusterName} from './lib'
 import {SponsorView} from './SponsorView'
 import {ContributorView} from './ContributorView'
 import {EscrowView} from './EscrowView'
 
-type Ctx = {cluster: ClusterName; conn: Connection; actor: Actor | null; setView: (v: View, escrow?: string) => void}
+type Ctx = {cluster: ClusterName; conn: Connection; actor: Actor | null; setView: (v: View, escrow?: string) => void; refreshBalance: () => void}
 const AppCtx = createContext<Ctx>(null as any)
 export const useApp = () => useContext(AppCtx)
 type View = 'sponsor' | 'contributor' | 'escrow'
+const asView = (v: unknown): View | null => (v === 'sponsor' || v === 'contributor' || v === 'escrow' ? v : null)
 
 export function Root() {
-  const [cluster, setCluster] = useState<ClusterName>((readHash().cluster as ClusterName) || (localStorage.getItem('clauselock:cluster') as ClusterName) || 'localnet')
-  useEffect(() => localStorage.setItem('clauselock:cluster', cluster), [cluster])
+  const [cluster, setCluster] = useState<ClusterName>(asCluster(readHash().cluster) ?? asCluster(localStorage.getItem('clauselock:cluster')) ?? 'localnet')
+  useEffect(() => {
+    localStorage.setItem('clauselock:cluster', cluster)
+    // Keep the URL in sync so a reload cannot restore a different cluster from an old fragment.
+    const p = new URLSearchParams(location.hash.slice(1)); if (p.get('cluster') !== cluster) { p.set('cluster', cluster); history.replaceState(null, '', `#${p.toString()}`) }
+  }, [cluster])
   return (
     <ConnectionProvider endpoint={CLUSTERS[cluster]} config={{commitment: 'confirmed'}}>
       {/* No adapters listed: Phantom (and other Wallet Standard wallets) are detected automatically. */}
@@ -31,7 +36,7 @@ function Shell({cluster, setCluster}: {cluster: ClusterName; setCluster: (c: Clu
   const {connection} = useConnection()
   const wallet = useWallet()
   const h = readHash()
-  const [view, setViewState] = useState<View>((h.view as View) || 'sponsor')
+  const [view, setViewState] = useState<View>(asView(h.view) ?? 'sponsor')
   const [escrow, setEscrow] = useState<string>(h.escrow ?? '')
   const [identity, setIdentity] = useState<string>(localStorage.getItem('clauselock:identity') ?? (cluster === 'localnet' ? 'burner:sponsor' : 'wallet'))
   useEffect(() => localStorage.setItem('clauselock:identity', identity), [identity])
@@ -49,8 +54,9 @@ function Shell({cluster, setCluster}: {cluster: ClusterName; setCluster: (c: Clu
     connection.getAccountInfo(programIdFor(cluster)).then((i) => live && setProgramOk(!!i?.executable)).catch(() => live && setProgramOk(false))
     return () => { live = false }
   }, [connection, cluster])
-  const refreshBalance = () => actor && connection.getBalance(actor.publicKey).then(setBalance).catch(() => setBalance(null))
-  useEffect(() => { setBalance(null); refreshBalance() }, [actor?.publicKey.toBase58(), connection])
+  const refreshBalance = () => { if (actor) connection.getBalance(actor.publicKey, 'confirmed').then(setBalance).catch(() => setBalance(null)) }
+  useEffect(() => { setBalance(null); refreshBalance(); const t = setInterval(refreshBalance, 10000); return () => clearInterval(t) }, [actor?.publicKey.toBase58(), connection])
+  const [airdropMsg, setAirdropMsg] = useState(''); const [airdropping, setAirdropping] = useState(false)
 
   const setView = (v: View, e?: string) => {
     setViewState(v); if (e !== undefined) setEscrow(e)
@@ -58,13 +64,19 @@ function Shell({cluster, setCluster}: {cluster: ClusterName; setCluster: (c: Clu
     history.replaceState(null, '', `#${p.toString()}`)
   }
   const airdrop = async () => {
-    if (!actor) return
-    const sig = await connection.requestAirdrop(actor.publicKey, 5 * LAMPORTS_PER_SOL)
-    await connection.confirmTransaction(sig, 'confirmed'); refreshBalance()
+    if (!actor || airdropping) return
+    setAirdropping(true); setAirdropMsg('')
+    try {
+      const sig = await connection.requestAirdrop(actor.publicKey, 5 * LAMPORTS_PER_SOL)
+      const bh = await connection.getLatestBlockhash('confirmed')
+      const res = await connection.confirmTransaction({signature: sig, ...bh}, 'confirmed')
+      if (res.value.err) setAirdropMsg(`Airdrop failed: ${JSON.stringify(res.value.err)}`)
+    } catch (e: any) { setAirdropMsg(`Airdrop failed: ${e?.message ?? e}`) }
+    finally { setAirdropping(false); refreshBalance() }
   }
 
   return (
-    <AppCtx.Provider value={{cluster, conn: connection, actor, setView}}>
+    <AppCtx.Provider value={{cluster, conn: connection, actor, setView, refreshBalance}}>
       <header>
         <div className="brand"><b>ClauseLock</b><span>the terms you read are the terms that execute</span></div>
         <div className="controls">
@@ -85,7 +97,8 @@ function Shell({cluster, setCluster}: {cluster: ClusterName; setCluster: (c: Clu
           </label>
           {identity === 'wallet' ? <WalletMultiButton /> : actor && <span className="pill" data-testid="actor">{actor.label} {short(actor.publicKey)}</span>}
           {actor && <span className="pill" data-testid="balance">{balance === null ? '…' : sol(balance)}</span>}
-          {actor && cluster === 'localnet' && <button className="small" data-testid="airdrop" onClick={airdrop}>Airdrop 5 SOL</button>}
+          {actor && cluster === 'localnet' && <button className="small" data-testid="airdrop" disabled={airdropping} onClick={airdrop}>{airdropping ? 'Airdropping…' : 'Airdrop 5 SOL'}</button>}
+          {airdropMsg && <span className="pill bad" role="alert">{airdropMsg}</span>}
         </div>
       </header>
       <div className={`banner ${cluster}`}>
@@ -100,7 +113,8 @@ function Shell({cluster, setCluster}: {cluster: ClusterName; setCluster: (c: Clu
           </button>
         ))}
       </nav>
-      <main>
+      {/* Remount the views on a cluster change: no verified state, snapshot or pending action carries across networks. */}
+      <main key={cluster}>
         {view === 'sponsor' && <SponsorView onCreated={(pda) => setView('escrow', pda)} />}
         {view === 'contributor' && <ContributorView escrow={escrow} setEscrow={setEscrow} />}
         {view === 'escrow' && <EscrowView escrow={escrow} setEscrow={setEscrow} />}

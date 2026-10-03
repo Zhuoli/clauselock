@@ -26,6 +26,8 @@ async function compileAndFund(page: Page, mins: [string, string, string]) {
   await expect(page.getByTestId('compiled-ok')).toBeVisible()
   await shot(page, '2-sponsor-compiled')
   await expect(page.getByTestId('terms-card')).toContainText('clause.demo.deadline.terms')
+  await expect(page.getByTestId('fund-summary')).toContainText('1 SOL')
+  await expect(page.getByTestId('fund-summary')).toContainText('localnet')
   await page.getByTestId('fund').click()
   await expect(page.getByTestId('fund-ok')).toBeVisible()
   await expect(page.getByTestId('status-state')).toHaveText('Funded')
@@ -58,6 +60,15 @@ test('happy path: compile → fund → verify & accept → submit → approve �
   await page.getByTestId('status-escrow-input').fill(escrow)
   await page.getByTestId('status-load').click()
   await expect(page.getByTestId('can-table')).toContainText('can_approve')
+  // Sponsor checks the evidence text against the on-chain hash before the irreversible approval.
+  await expect(page.getByTestId('evidence-match')).toContainText('Matches')
+  await page.getByTestId('evidence-check').fill('something else')
+  await expect(page.getByTestId('evidence-match')).toContainText('NOT match')
+  await page.getByTestId('evidence-check').fill('https://example.org/explainer @ commit abc123')
+  // Editing the address without pressing Load disables actions instead of retargeting them.
+  await page.getByTestId('status-escrow-input').fill('11111111111111111111111111111111')
+  await expect(page.getByTestId('approve')).toBeDisabled()
+  await page.getByTestId('status-escrow-input').fill(escrow)
   await page.getByTestId('approve').click()
   await expect(page.getByTestId('status-state')).toHaveText('Approved')
 
@@ -65,6 +76,7 @@ test('happy path: compile → fund → verify & accept → submit → approve �
   await page.getByTestId('refund').count().then((n) => expect(n).toBe(0)) // no refund branch once approved
   await page.getByTestId('pay').click()
   await expect(page.getByTestId('status-state')).toHaveText('Paid')
+  await expect(page.getByTestId('status-tx-ok')).toContainText('Explorer')
   await expect(page.getByTestId('timeline')).toContainText('Paid to contributor, triggered by')
   await expect(page.getByTestId('timeline')).toContainText('clause.demo.review')
   await shot(page, '4-status-paid')

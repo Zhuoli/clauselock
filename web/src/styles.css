@@ -28,7 +28,9 @@ code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; word
 .terms th, table.can th { text-align: left; width: 140px; vertical-align: top; padding: 4px 6px 4px 0; }
 .terms td, table.can td { padding: 4px 6px; vertical-align: top; border-top: 1px solid #eef0f2; }
 table.can tr.good td, table.can tr.good th { background: #eef8f0; }
-.cite { font-size: 11px; color: #512da8; cursor: help; font-family: ui-monospace, monospace; }
+button.cite { font-size: 11px; color: #512da8; background: none; padding: 0 2px; margin: 0; cursor: pointer; font-family: ui-monospace, monospace; text-decoration: underline dotted; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #f4b400; outline-offset: 2px; }
+.stale { background: #fde7e9; padding: 8px; border-radius: 6px; }
 .time small { color: #5c6773; }
 .disclosures { font-size: 13px; color: #5c3d00; background: #fff8e1; padding: 8px 8px 8px 24px; border-radius: 6px; }
 .clauses { font-size: 13px; }
